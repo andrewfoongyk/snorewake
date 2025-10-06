@@ -27,7 +27,7 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
             AlarmScheduler.cancelThread(thread) {
                 AlarmScheduler.scheduleRepeating(thread: thread,
                                                  startInSeconds: 300,
-                                                 intervalSeconds: 5,
+                                                 intervalSeconds: 3,
                                                  totalDurationSeconds: 180)
             }
         default:

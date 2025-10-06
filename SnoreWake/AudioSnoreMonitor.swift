@@ -15,9 +15,9 @@ final class AudioSnoreMonitor: NSObject, ObservableObject {
     private let engine = AVAudioEngine()
     private let session = AVAudioSession.sharedInstance()
 
-    // Rolling window of last 15 samples (1 per second)
+    // Rolling window of last 2 samples (1 per second)
     private var recentDb: [Float] = []
-    private let windowSeconds = 15
+    private let windowSeconds = 2
     private var sampleRate: Double = 48000
 
     // UI-published state
@@ -33,6 +33,18 @@ final class AudioSnoreMonitor: NSObject, ObservableObject {
 
     private var isRunning = false
     private var accumSamples: [Float] = []
+    
+    // Snore burst detection state
+    private var burstActive = false
+    private var burstStart: Date?
+    private var lastBurstEnd: Date?
+    private var burstTimestamps: [Date] = []   // recent valid bursts within 30 s
+
+    // Tunables
+    private let minBurstSec: TimeInterval = 0.7
+    private let maxBurstSec: TimeInterval = 3.0
+    private let minQuietSec: TimeInterval = 1.0
+    private let burstsToTrigger = 3
 
     func start() throws {
         guard !isRunning else { return }
@@ -84,30 +96,56 @@ final class AudioSnoreMonitor: NSObject, ObservableObject {
             let db = 20.0 * log10f(max(rms, 1e-7))
 
             DispatchQueue.main.async {
-                self.recentDb.append(db)
-                if self.recentDb.count > self.windowSeconds { self.recentDb.removeFirst() }
-                let avg = self.recentDb.reduce(0, +) / Float(max(self.recentDb.count, 1))
-                self.avgDb = avg
-
-                if self.shouldTrigger(forAverage: avg) {
-                    if self.shouldTrigger(forAverage: avg) {
-                        self.startPersistentAlarm()
-                        self.startCooldown(seconds: 60)
-                        self.recentDb.removeAll(keepingCapacity: true)
-                    }
-                    self.startCooldown(seconds: 60) // 1 minute
-                    self.recentDb.removeAll(keepingCapacity: true)
-                }
+                // Show live level in your UI if you want
+                self.avgDb = db
+                // Use burst heuristic instead of 30 s rolling average
+                self.stepSnoreHeuristic(db: db)
             }
         }
     }
 
-    private func shouldTrigger(forAverage avg: Float) -> Bool {
-        if let until = cooldownUntil, Date() < until { return false }
-        guard recentDb.count == windowSeconds else { return false }
-        return avg >= thresholdDb
-    }
+    private func stepSnoreHeuristic(db: Float) {
+        let now = Date()
 
+        if burstActive {
+            if let s = burstStart, now.timeIntervalSince(s) > maxBurstSec {
+                // Too long above threshold, treat as steady noise and reset
+                burstActive = false
+                burstStart = nil
+                lastBurstEnd = now
+                return
+            }
+            if db < thresholdDb {
+                if let s = burstStart {
+                    let dur = now.timeIntervalSince(s)
+                    if dur >= minBurstSec {
+                        burstTimestamps.append(now)
+                        // keep only last 30 s
+                        burstTimestamps = burstTimestamps.filter { now.timeIntervalSince($0) <= 30 }
+
+                        if burstTimestamps.count >= burstsToTrigger {
+                            startPersistentAlarm()       // your 5 s cadence alarm
+                            startCooldown(seconds: 60)   // or 300 if you prefer
+                            burstTimestamps.removeAll()
+                        }
+                    }
+                }
+                burstActive = false
+                burstStart = nil
+                lastBurstEnd = now
+            }
+        } else {
+            let quietOk: Bool = {
+                guard let q = lastBurstEnd else { return true }
+                return now.timeIntervalSince(q) >= minQuietSec
+            }()
+            if db >= thresholdDb && quietOk {
+                burstActive = true
+                burstStart = now
+            }
+        }
+    }
+    
     // MARK: - Alerts
     func fireSingleAlert() {
         let content = UNMutableNotificationContent()
@@ -120,13 +158,13 @@ final class AudioSnoreMonitor: NSObject, ObservableObject {
         UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
     }
 
-    // Schedules one notification per minute for 15 minutes.
+    // Schedules one notification per 3 seconds for 3 minutes.
     // Use a constant thread so STOP can cancel them all.
     func startPersistentAlarm() {
         let thread = "snore_alarm"
         AlarmScheduler.scheduleRepeating(thread: thread,
                                          startInSeconds: 1,
-                                         intervalSeconds: 5,
+                                         intervalSeconds: 3,
                                          totalDurationSeconds: 180) // 3 minutes
     }
 

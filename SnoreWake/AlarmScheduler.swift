@@ -13,7 +13,7 @@ enum AlarmScheduler {
     static func scheduleRepeating(
         thread: String,
         startInSeconds: TimeInterval = 1,
-        intervalSeconds: Int = 5,
+        intervalSeconds: Int = 3,
         totalDurationSeconds: Int = 180
     ) {
         precondition(intervalSeconds >= 1, "iOS requires >= 1s trigger interval")

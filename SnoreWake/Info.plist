@@ -2,6 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>AlegreyaSans-Italic.ttf</string>
+		<string>AlegreyaSans-MediumItalic.ttf</string>
+		<string>AlegreyaSans-Regular.ttf</string>
+		<string>AlegreyaSansSC-Light.ttf</string>
+		<string>AlegreyaSansSC-Regular.ttf</string>
+		<string>AlegreyaSansSC-Thin.ttf</string>
+		<string>Jost-VariableFont_wght.ttf</string>
+		<string>FiraSans-SemiBold.ttf</string>
+		<string>FiraSans-Regular.ttf</string>
+		<string>FiraSans-Italic.tff</string>
+	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app listens for snoring to wake you.</string>
 	<key>UIBackgroundModes</key>
