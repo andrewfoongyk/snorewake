@@ -23,6 +23,18 @@ final class AudioSnoreMonitor: NSObject, ObservableObject {
     // UI-published state
     @Published var avgDb: Float = -80
     @Published var cooldownRemaining: Int = 0
+    
+    // Live history for the sparkline
+    @Published var recentDbHistory: [Double] = []
+
+    // How long the graph shows (seconds)
+    private let historySeconds = 60
+
+    // How often to compute dB and update the graph (Hz)
+    private let displayHz: Int = 10   // set to 5 for 5 Hz, 10 for 10 Hz
+
+    // Internal buffer for sub-second chunks
+    private var accumSamples: [Float] = []
 
     // Config
     var thresholdDb: Float = -35.0
@@ -32,7 +44,7 @@ final class AudioSnoreMonitor: NSObject, ObservableObject {
     private var tickerCancellable: AnyCancellable?
 
     private var isRunning = false
-    private var accumSamples: [Float] = []
+    // private var accumSamples: [Float] = []
     
     // Snore burst detection state
     private var burstActive = false
@@ -41,9 +53,9 @@ final class AudioSnoreMonitor: NSObject, ObservableObject {
     private var burstTimestamps: [Date] = []   // recent valid bursts within 30 s
 
     // Tunables
-    private let minBurstSec: TimeInterval = 0.7
-    private let maxBurstSec: TimeInterval = 3.0
-    private let minQuietSec: TimeInterval = 1.0
+    private let minBurstSec: TimeInterval = 0.3
+    private let maxBurstSec: TimeInterval = 4.0
+    private let minQuietSec: TimeInterval = 0.5
     private let burstsToTrigger = 3
 
     func start() throws {
@@ -86,23 +98,37 @@ final class AudioSnoreMonitor: NSObject, ObservableObject {
         let frameCount = Int(buffer.frameLength)
         accumSamples.append(contentsOf: UnsafeBufferPointer(start: channelData, count: frameCount))
 
-        let framesPerSecond = Int(sampleRate)
-        if accumSamples.count >= framesPerSecond {
-            let oneSecond = Array(accumSamples.prefix(framesPerSecond))
-            accumSamples.removeFirst(framesPerSecond)
+        // Number of frames per sub-second chunk (e.g., at 10 Hz and 48k sampleRate → 4800)
+        let framesPerChunk = Int(sampleRate) / max(displayHz, 1)
+        guard framesPerChunk > 0 else { return }
 
+        // Process as many whole chunks as we have accumulated
+        while accumSamples.count >= framesPerChunk {
+            let chunk = Array(accumSamples.prefix(framesPerChunk))
+            accumSamples.removeFirst(framesPerChunk)
+
+            // RMS → dBFS for this sub-second chunk
             var rms: Float = 0
-            vDSP_rmsqv(oneSecond, 1, &rms, vDSP_Length(oneSecond.count))
+            vDSP_rmsqv(chunk, 1, &rms, vDSP_Length(chunk.count))
             let db = 20.0 * log10f(max(rms, 1e-7))
 
             DispatchQueue.main.async {
-                // Show live level in your UI if you want
+                // Show the most recent value in your UI (you can rename avgDb to liveDb if you want)
                 self.avgDb = db
-                // Use burst heuristic instead of 30 s rolling average
+
+                // Append to history and trim to capacity (duration * Hz)
+                self.recentDbHistory.append(Double(db))
+                let maxCount = self.historySeconds * self.displayHz
+                if self.recentDbHistory.count > maxCount {
+                    self.recentDbHistory.removeFirst(self.recentDbHistory.count - maxCount)
+                }
+
+                // Run your snore logic on the higher-rate stream
                 self.stepSnoreHeuristic(db: db)
             }
         }
     }
+
 
     private func stepSnoreHeuristic(db: Float) {
         let now = Date()
