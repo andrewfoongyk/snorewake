@@ -43,9 +43,6 @@ struct ContentView: View {
                 .tracking(6)
                 .foregroundStyle(textPri)
 
-            Divider()
-                .overlay(textSec.opacity(0.35))
-
             // --- Live sparkline (Tufte style) ---
             VolumeSparkline(
                 values: monitor.recentDbHistory,
@@ -66,9 +63,6 @@ struct ContentView: View {
                 HStack(spacing: 0) {
                     Text("\(formatDbEnDash(Double(monitor.avgDb))) d")
                         .monospacedDigit()
-//                    Text("\(String(format: "%.1f", Double(monitor.avgDb))) d")
-//                        .monospacedDigit()
-//                        .foregroundStyle(textPri)
 
                     Text("bfs")
                         .font(.custom("AlegreyaSansSC-Regular", size: 24)) // match your body size
@@ -127,11 +121,6 @@ struct ContentView: View {
             .tint(accent2)
 
             HStack(spacing: 12) {
-//                Button("alert") { monitor.fireSingleAlert() }
-//                    .buttonStyle(.bordered)
-//                    .tint(accent1)
-//                    .font(.custom("AlegreyaSansSC-Regular", size: 20))
-//                    .tracking(3)
 
                 Button("test alarm") { monitor.startPersistentAlarm() }
                     .buttonStyle(.bordered)
@@ -139,17 +128,11 @@ struct ContentView: View {
                     .font(.custom("AlegreyaSansSC-Regular", size: 20))
                     .tracking(3)
 
-//                Button(monitor.cooldownRemaining > 0 ? "reset cooldown" : "cooldown") {
-//                    monitor.startCooldown(seconds: 60)
-//                }
                 .buttonStyle(.bordered)
                 .tint(accent2)
                 .font(.custom("AlegreyaSansSC-Regular", size: 20))
                 .tracking(3)
             }
-
-            Divider()
-                .overlay(textSec.opacity(0.35))
 
             Text("Grant microphone and notifications. Keep iPhone on power overnight. Watch app → Notifications → mirror this app.")
                 .foregroundStyle(textSec)

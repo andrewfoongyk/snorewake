@@ -19,6 +19,11 @@ final class AudioSnoreMonitor: NSObject, ObservableObject {
     private var recentDb: [Float] = []
     private let windowSeconds = 2
     private var sampleRate: Double = 48000
+    
+    private var isOnCooldown: Bool {
+        if let until = cooldownUntil { return until > Date() }
+        return false
+    }
 
     // UI-published state
     @Published var avgDb: Float = -80
@@ -53,9 +58,9 @@ final class AudioSnoreMonitor: NSObject, ObservableObject {
     private var burstTimestamps: [Date] = []   // recent valid bursts within 30 s
 
     // Tunables
-    private let minBurstSec: TimeInterval = 0.3
-    private let maxBurstSec: TimeInterval = 4.0
-    private let minQuietSec: TimeInterval = 0.5
+    private let minBurstSec: TimeInterval = 0.2
+    private let maxBurstSec: TimeInterval = 10.0
+    private let minQuietSec: TimeInterval = 0.3
     private let burstsToTrigger = 3
 
     func start() throws {
@@ -150,10 +155,14 @@ final class AudioSnoreMonitor: NSObject, ObservableObject {
                         burstTimestamps = burstTimestamps.filter { now.timeIntervalSince($0) <= 30 }
 
                         if burstTimestamps.count >= burstsToTrigger {
-                            startPersistentAlarm()       // your 5 s cadence alarm
-                            startCooldown(seconds: 60)   // or 300 if you prefer
+                            if !isOnCooldown {
+                                startPersistentAlarm()
+                                startCooldown(seconds: 60)   // or 300
+                            }
+                            // Regardless, reset the counter so we don’t keep tripping during cooldown
                             burstTimestamps.removeAll()
                         }
+
                     }
                 }
                 burstActive = false
